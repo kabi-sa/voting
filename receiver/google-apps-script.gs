@@ -146,6 +146,24 @@ function doPost(e) {
       rosterSheet().appendRow([emp.id || "", emp.name || "", email, emp.jt || ""]);
       return out({ ok: true });
     }
+    if (action === "bulkadd") {
+      const emps = Array.isArray(b.emps) ? b.emps : [];
+      const existing = getRoster(); const seen = {}; existing.forEach(p => seen[p.email] = 1);
+      let maxN = 0; existing.forEach(p => { const n = parseInt(String(p.id).slice(3), 10); if (n > maxN) maxN = n; });
+      const rows = []; const skipped = [];
+      emps.forEach(emp => {
+        const email = String(emp.email || "").toLowerCase().trim();
+        if (!email.endsWith(DOMAIN)) { skipped.push(email + " — not " + DOMAIN); return; }
+        if (seen[email]) { skipped.push(email + " — duplicate"); return; }
+        seen[email] = 1; maxN++;
+        rows.push(["EMP" + ("000" + maxN).slice(-3), String(emp.name || ""), email, String(emp.jt || "")]);
+      });
+      if (rows.length) {
+        const sh = rosterSheet();
+        sh.getRange(sh.getLastRow() + 1, 1, rows.length, 4).setValues(rows);
+      }
+      return out({ ok: true, added: rows.length, skipped: skipped });
+    }
     if (action === "delemp") {
       const sh = rosterSheet();
       const ids = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 1).getValues();
