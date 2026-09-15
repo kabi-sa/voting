@@ -1066,17 +1066,20 @@ function parseSpreadsheetML(t){
 }
 function rowsToRecords(rows){
   let hi=-1, map=null;
-  for(let i=0;i<Math.min(rows.length,10);i++){
-    const low=rows[i].map(x=>String(x).toLowerCase());
-    const em=low.findIndex(x=>/e-?mail/.test(x));
-    if(em>=0){
-      const nm=low.findIndex(x=>/name/.test(x)&&!/e-?mail/.test(x));
-      const jt=low.findIndex(x=>/job|title/.test(x));
-      hi=i; map={nm:nm>=0?nm:0, em, jt:jt>=0?jt:(em+1)}; break;
-    }
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    const cells=rows[i].map(x=>String(x||"").trim().toLowerCase());
+    // a real header row names BOTH columns in separate, short cells —
+    // instruction sentences ("Emails must be @kabi.ai …") can never qualify
+    const em=cells.findIndex(x=>x && x.length<=30 && /e-?mail/.test(x));
+    if(em<0) continue;
+    const nm=cells.findIndex((x,j)=>j!==em && x && x.length<=30 && /name/.test(x) && !/e-?mail/.test(x));
+    if(nm<0) continue;
+    const jt=cells.findIndex((x,j)=>j!==em && j!==nm && x && x.length<=30 && /(job|title|position|role)/.test(x));
+    hi=i; map={nm,em,jt}; break;
   }
-  if(hi<0) throw new Error("header row with Name/Email not found");
-  return rows.slice(hi+1).map(r=>({name:String(r[map.nm]||"").trim(), email:String(r[map.em]||"").trim(), jt:String(r[map.jt]||"").trim()}));
+  if(hi<0) throw new Error("couldn't find a header row that names both a Name column and an Email column");
+  return rows.slice(hi+1).map(r=>({ name:String(r[map.nm]||"").trim(),
+    email:String(r[map.em]||"").trim(), jt: map.jt>=0? String(r[map.jt]||"").trim() : "" }));
 }
 async function icBulkUpload(file){
   if(!file) return;
