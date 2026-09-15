@@ -371,6 +371,7 @@ const ICON = {
   mail:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
   copy:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>',
   dl:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/></svg>',
+  up:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V8"/><path d="m7 12 5-5 5 5"/><path d="M4 21h16"/></svg>',
   chev:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
 };
 const initials = n => n.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
@@ -657,6 +658,12 @@ function render(){
             <input id="empE" placeholder="name@kabi.ai">
             <input id="empJ" placeholder="Job title">
             <button class="btn primary" onclick="icAddEmp()">Add employee</button>
+          </div>
+          <div class="icbtns" style="margin-bottom:10px">
+            <button class="btn ghost small" onclick="icDownloadRosterTemplate()">${ICON.dl} Excel template</button>
+            <label class="btn ghost small" style="cursor:pointer">${ICON.up} Upload filled template
+              <input type="file" accept=".xlsx,.xls,.xml,.csv" style="display:none"
+                onchange="icBulkUpload(this.files[0]);this.value='';"></label>
           </div>
           ${empMsg?`<div class="empmsg ${empMsg.startsWith("err:")?"bad":"good"}">${esc(empMsg.slice(empMsg.indexOf(":")+1))}</div>`:""}
           ${empListOpen?`<div class="empgrid">${PEOPLE.map(p=>`
@@ -962,6 +969,158 @@ function updateLiveLink(){
 }
 function monthTag(){ const y=CYCLE.slice(0,4), mm=parseInt(CYCLE.slice(5),10); return MONTH_NAMES[mm-1].slice(0,3)+" "+y; }
 function xEsc(t){ return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+/* ============ bulk roster import ============ */
+function icDownloadRosterTemplate(){
+  const border='<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C9DDEE"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C9DDEE"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C9DDEE"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#C9DDEE"/></Borders>';
+  const xml=`<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="title"><Font ss:FontName="Calibri" ss:Size="14" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#216AB1" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>
+  <Style ss:ID="sub"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#0EB3AE" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>
+  <Style ss:ID="hdr"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#216AB1" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>${border}</Style>
+  <Style ss:ID="ex"><Font ss:FontName="Calibri" ss:Size="11" ss:Italic="1" ss:Color="#5B7186"/><Interior ss:Color="#EAF6FB" ss:Pattern="Solid"/>${border}</Style>
+  <Style ss:ID="cell"><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#17293B"/>${border}</Style>
+ </Styles>
+ <Worksheet ss:Name="Roster">
+  <Table>
+   <Column ss:AutoFitWidth="0" ss:Width="180"/><Column ss:AutoFitWidth="0" ss:Width="220"/><Column ss:AutoFitWidth="0" ss:Width="180"/>
+   <Row ss:Height="28"><Cell ss:StyleID="title" ss:MergeAcross="2"><Data ss:Type="String">KABi Recognition — Roster Template</Data></Cell></Row>
+   <Row ss:Height="15"><Cell ss:StyleID="sub" ss:MergeAcross="2"><Data ss:Type="String">Fill one employee per row. Emails must be @kabi.ai. Grey example rows are skipped automatically.</Data></Cell></Row>
+   <Row ss:Height="24"><Cell ss:StyleID="hdr"><Data ss:Type="String">Full Name</Data></Cell><Cell ss:StyleID="hdr"><Data ss:Type="String">KABi Email</Data></Cell><Cell ss:StyleID="hdr"><Data ss:Type="String">Job Title</Data></Cell></Row>
+   <Row><Cell ss:StyleID="ex"><Data ss:Type="String">Sarah Al-Otaibi</Data></Cell><Cell ss:StyleID="ex"><Data ss:Type="String">example@delete.this</Data></Cell><Cell ss:StyleID="ex"><Data ss:Type="String">HC Business Partner (example)</Data></Cell></Row>
+   ${Array.from({length:30},()=>'<Row><Cell ss:StyleID="cell"><Data ss:Type="String"></Data></Cell><Cell ss:StyleID="cell"><Data ss:Type="String"></Data></Cell><Cell ss:StyleID="cell"><Data ss:Type="String"></Data></Cell></Row>').join("\n   ")}
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>3</SplitHorizontal><TopRowBottomPane>3</TopRowBottomPane><ActivePane>2</ActivePane></WorksheetOptions>
+ </Worksheet>
+</Workbook>`;
+  const blob=new Blob([xml],{type:"application/vnd.ms-excel"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="KABi-Roster-Template.xls";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+const xmlUn = t => String(t||"").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#(\d+);/g,(m,n)=>String.fromCharCode(+n)).replace(/&amp;/g,"&");
+async function inflateRaw(u8){
+  const ds=new DecompressionStream("deflate-raw");
+  return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer());
+}
+async function unzip(buf){
+  const dv=new DataView(buf), u8=new Uint8Array(buf);
+  let e=buf.byteLength-22; while(e>=0 && dv.getUint32(e,true)!==0x06054b50) e--;
+  if(e<0) throw new Error("not a zip");
+  let off=dv.getUint32(e+16,true), n=dv.getUint16(e+10,true); const files={};
+  for(let i=0;i<n;i++){
+    if(dv.getUint32(off,true)!==0x02014b50) break;
+    const method=dv.getUint16(off+10,true), csize=dv.getUint32(off+20,true),
+          nlen=dv.getUint16(off+28,true), xlen=dv.getUint16(off+30,true), clen=dv.getUint16(off+32,true),
+          lho=dv.getUint32(off+42,true),
+          name=new TextDecoder().decode(u8.slice(off+46,off+46+nlen));
+    const lnlen=dv.getUint16(lho+26,true), lxlen=dv.getUint16(lho+28,true);
+    files[name]={method,data:u8.slice(lho+30+lnlen+lxlen, lho+30+lnlen+lxlen+csize)};
+    off+=46+nlen+xlen+clen;
+  }
+  return files;
+}
+async function parseXlsx(buf){
+  const files=await unzip(buf);
+  let shared=[]; const ssf=files["xl/sharedStrings.xml"];
+  if(ssf){ const t=new TextDecoder().decode(ssf.method===8? await inflateRaw(ssf.data):ssf.data);
+    shared=[...t.matchAll(/<si>([\s\S]*?)<\/si>/g)].map(m=>xmlUn([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x=>x[1]).join(""))); }
+  const sheetName=Object.keys(files).filter(k=>/^xl\/worksheets\/sheet\d+\.xml$/.test(k)).sort()[0];
+  if(!sheetName) throw new Error("no worksheet");
+  const sf=files[sheetName];
+  const xml=new TextDecoder().decode(sf.method===8? await inflateRaw(sf.data):sf.data);
+  const rows=[];
+  for(const rm of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)){
+    const cells=[];
+    for(const cm of rm[1].matchAll(/<c\s([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)){
+      const attrs=cm[1]||"", inner=cm[2]||"";
+      const rAttr=/r="([A-Z]+)\d+"/.exec(attrs);
+      let ci=cells.length;
+      if(rAttr){ ci=0; for(const ch of rAttr[1]) ci=ci*26+(ch.charCodeAt(0)-64); ci--; }
+      const tAttr=/t="(\w+)"/.exec(attrs);
+      let val="";
+      const v=/<v>([\s\S]*?)<\/v>/.exec(inner), is=/<is>[\s\S]*?<t[^>]*>([\s\S]*?)<\/t>/.exec(inner);
+      if(is) val=xmlUn(is[1]);
+      else if(v){ val = (tAttr && tAttr[1]==="s") ? (shared[parseInt(v[1],10)]||"") : xmlUn(v[1]); }
+      cells[ci]=String(val);
+    }
+    rows.push(Array.from(cells,x=>x==null?"":x));
+  }
+  return rows;
+}
+function parseCsvText(t){
+  const rows=[]; let row=[],cur="",q=false;
+  for(let i=0;i<t.length;i++){ const ch=t[i];
+    if(q){ if(ch==='"'){ if(t[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+    else if(ch==='"') q=true;
+    else if(ch===','){ row.push(cur); cur=""; }
+    else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&t[i+1]==='\n')i++; row.push(cur); cur="";
+      if(row.some(x=>x.trim()!=="")) rows.push(row); row=[]; }
+    else cur+=ch; }
+  if(cur!==""||row.length){ row.push(cur); if(row.some(x=>x.trim()!=="")) rows.push(row); }
+  return rows;
+}
+function parseSpreadsheetML(t){
+  return [...t.matchAll(/<Row[^>]*>([\s\S]*?)<\/Row>/g)]
+    .map(rm=>[...rm[1].matchAll(/<Data[^>]*>([\s\S]*?)<\/Data>/g)].map(x=>xmlUn(x[1])));
+}
+function rowsToRecords(rows){
+  let hi=-1, map=null;
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const low=rows[i].map(x=>String(x).toLowerCase());
+    const em=low.findIndex(x=>/e-?mail/.test(x));
+    if(em>=0){
+      const nm=low.findIndex(x=>/name/.test(x)&&!/e-?mail/.test(x));
+      const jt=low.findIndex(x=>/job|title/.test(x));
+      hi=i; map={nm:nm>=0?nm:0, em, jt:jt>=0?jt:(em+1)}; break;
+    }
+  }
+  if(hi<0) throw new Error("header row with Name/Email not found");
+  return rows.slice(hi+1).map(r=>({name:String(r[map.nm]||"").trim(), email:String(r[map.em]||"").trim(), jt:String(r[map.jt]||"").trim()}));
+}
+async function icBulkUpload(file){
+  if(!file) return;
+  empListOpen=true; empMsg="ok:Reading "+file.name+" …"; render();
+  let rows;
+  try{
+    const buf=await file.arrayBuffer(); const head=new Uint8Array(buf.slice(0,4));
+    if(head[0]===0x50 && head[1]===0x4B){
+      if(typeof DecompressionStream==="undefined") throw new Error("this browser can't read .xlsx — save the file as CSV and upload that");
+      rows=await parseXlsx(buf);
+    } else {
+      const text=new TextDecoder().decode(buf);
+      rows = text.trimStart().startsWith("<?xml") ? parseSpreadsheetML(text) : parseCsvText(text);
+    }
+    const recs=rowsToRecords(rows);
+    const seen=new Set(PEOPLE.map(p=>p.email.toLowerCase())); const valid=[], skipped=[];
+    recs.forEach(r=>{
+      const name=r.name, email=r.email.toLowerCase(), jt=r.jt;
+      if(!name && !email) return;
+      if(name.trim().split(/\s+/).filter(w=>w.length>=2).length<2){ skipped.push((email||name)+" — name needs first & family"); return; }
+      if(!/^[^\s@]+@kabi\.ai$/i.test(email)){ skipped.push((email||name)+" — not a @kabi.ai email"); return; }
+      if(seen.has(email)){ skipped.push(email+" — duplicate"); return; }
+      seen.add(email); valid.push({name:name.trim(), email, jt});
+    });
+    if(!valid.length){ empMsg="err:No valid rows found. Skipped "+skipped.length+": "+skipped.slice(0,3).join(" · "); render(); return; }
+    if(SUBMIT_ENDPOINT){
+      const j=await api({action:"bulkAdd", code:icCode, emps:valid});
+      await loadRoster();
+      const srvSkip=(j.skipped||[]);
+      empMsg="ok:Added "+(j.added!=null?j.added:valid.length)+" employee(s) from "+file.name
+        +((skipped.length+srvSkip.length)?" · Skipped "+(skipped.length+srvSkip.length)+": "+skipped.concat(srvSkip).slice(0,3).join(" · ")+(skipped.length+srvSkip.length>3?" …":""):"");
+    } else {
+      valid.forEach(v=>{
+        const num=Math.max(0,...PEOPLE.map(p=>parseInt(p.id.slice(3),10)||0))+1;
+        const id="EMP"+String(num).padStart(3,"0");
+        PEOPLE.push({id, name:v.name, email:v.email, jt:v.jt, g:AV_G[PEOPLE.length%AV_G.length]});
+        CATS.forEach(c=>orders[c.code].splice(Math.floor(Math.random()*(orders[c.code].length+1)),0,id));
+      });
+      empMsg="ok:Added "+valid.length+" employee(s) from "+file.name
+        +(skipped.length?" · Skipped "+skipped.length+": "+skipped.slice(0,3).join(" · ")+(skipped.length>3?" …":""):"");
+    }
+  }catch(e){ empMsg="err:Couldn't read the file — "+(e.message||"unknown error"); }
+  render();
+}
 function icDownloadXls(){
   const TINT = { EOM:"#D8D6EA", BUILD:"#D2DFEC", INNOVATE:"#D2E8EB", KABITAL:"#E1DEEE", GROW:"#D5E8E0" };
   const votes = cycleVotes();
