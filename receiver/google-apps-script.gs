@@ -214,3 +214,14 @@ function doPost(e) {
   } finally { lock.releaseLock(); }
   return out({ ok: true });
 }
+
+
+/* Native bridge for pages served by this script (google.script.run) —
+   routes client calls through the same doGet/doPost logic. */
+function clientApi(req) {
+  try {
+    if (req && req.get)  { return JSON.parse(doGet({ parameter: req.get }).getContent()); }
+    if (req && req.post) { return JSON.parse(doPost({ postData: { contents: JSON.stringify(req.post) } }).getContent()); }
+  } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+  return { ok: false, error: "bad request" };
+}
