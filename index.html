@@ -651,13 +651,13 @@ function render(){
 
         <div class="icsec">
           <h3>Send emails</h3>
-          <p class="hint">Drafts always open <b>empty</b> — no recipients pre-filled; add your distribution list in Outlook. Copy the designed email and paste it into the draft body for the branded version. ${nonVoters.length} employee${nonVoters.length===1?"":"s"} haven't voted yet.</p>
+          <p class="hint">Two ways to send, both with <b>no recipients pre-filled</b>: download the <b>.eml</b> and double-click it — Outlook opens it as a ready-to-send draft with the full design — or copy the designed email and paste it into a draft you create yourself. ${nonVoters.length} employee${nonVoters.length===1?"":"s"} haven't voted yet.</p>
           ${["start","reminder","winners"].map(k=>`
           <div class="mailcard">
             <div class="mc-t"><b>${EMAIL_META[k].label}</b><span>${esc(EMAIL_META[k].subject())}</span></div>
             <div class="mc-b">
               <button class="btn primary" onclick="icCopyEmail('${k}')">${copiedKind===k?ICON.check+" Copied — paste into your draft":"Copy designed email"}</button>
-              <button class="btn ghost" onclick="icOpenDraft('${k}')">${ICON.mail} Open empty draft</button>
+              <button class="btn ghost" onclick="icDownloadEml('${k}')">${ICON.dl} Download email draft (.eml)</button>
               <button class="btn ghost" onclick="icPreview('${k}')">${previewKind===k?"Hide preview":"Preview"}</button>
             </div>
           </div>
@@ -911,10 +911,44 @@ const EMAIL_META = {
   reminder: { label:"Reminder to non-voters",  subject: () => "Reminder — your "+CYCLE_LABEL+" recognition vote is waiting" },
   winners:  { label:"Champions of the Month announcement", subject: () => CYCLE_LABEL+" — Champions of the Month" },
 };
-function icOpenDraft(kind){
-  // ALWAYS an empty draft: no To, no BCC — IC adds the distribution list.
-  const href = "mailto:?subject="+encodeURIComponent(EMAIL_META[kind].subject());
-  const a=document.createElement("a"); a.href=href; document.body.appendChild(a); a.click(); a.remove();
+function b64utf8(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin = ""; const CH = 0x8000;
+  for(let i=0;i<bytes.length;i+=CH) bin += String.fromCharCode.apply(null, bytes.subarray(i,i+CH));
+  return btoa(bin).replace(/(.{76})/g,"$1\r\n");
+}
+function icDownloadEml(kind){
+  // A real email file: opens in Outlook as a ready-to-send DRAFT (X-Unsent: 1),
+  // with the full branded design — no recipients, IC adds the distribution list.
+  const subject = EMAIL_META[kind].subject();
+  const html = emailHTML(kind);
+  const plain = "This message is best viewed in HTML.\r\n\r\n" + subject;
+  const b = "KABI_EOM_" + Date.now();
+  const eml = [
+    "X-Unsent: 1",
+    "Subject: =?UTF-8?B?" + btoa(String.fromCharCode(...new TextEncoder().encode(subject))) + "?=",
+    "To: ",
+    "Date: " + new Date().toUTCString(),
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/alternative; boundary="' + b + '"',
+    "",
+    "--" + b,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    b64utf8(plain),
+    "--" + b,
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    b64utf8(html),
+    "--" + b + "--",
+    ""
+  ].join("\r\n");
+  const blob = new Blob([eml], {type:"message/rfc822"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "KABi-" + EMAIL_META[kind].label.replace(/[^A-Za-z0-9]+/g,"-") + "-" + monthTag() + ".eml";
+  document.body.appendChild(a); a.click(); a.remove();
 }
 const EF = "'Segoe UI', Calibri, Arial, sans-serif";
 function emailShell(kicker, title, bodyHtml, footerNote){
@@ -1012,10 +1046,19 @@ function icAddEmp(){
 }
 async function icDelEmp(id){
   const i = PEOPLE.findIndex(p=>p.id===id); if(i<0) return;
-  const nm = PEOPLE[i].name;
+  const nm = PEOPLE[i].name, em = PEOPLE[i].email;
   if(SUBMIT_ENDPOINT){
-    try{ await api({action:"delEmp", code:icCode, id}); await loadRoster(); }
-    catch(e){ empMsg="err:Couldn't remove on the receiver: "+(e.message||"error"); render(); return; }
+    try{
+      // send BOTH id and email — the receiver matches on either, so a blank/
+      // mismatched ID column in the Roster sheet can't block the removal.
+      await api({action:"delEmp", code:icCode, id, email:em});
+      await loadRoster();
+      if(PEOPLE.some(p=>p.email===em)){
+        empMsg="err:The receiver didn't remove "+nm+". Update the Apps Script to the latest version, then Deploy → Manage deployments → New version.";
+        empListOpen=true; render(); return;
+      }
+    }
+    catch(e){ empMsg="err:Couldn't remove "+nm+": "+(e.message||"error"); empListOpen=true; render(); return; }
   } else {
     PEOPLE.splice(i,1);
     CATS.forEach(c=>{ orders[c.code] = orders[c.code].filter(x=>x!==id); });
