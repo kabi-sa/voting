@@ -262,11 +262,19 @@ body.oncolor #bgtex{opacity:1;}
 .empmsg{font-size:12.5px;border-radius:9px;padding:9px 12px;margin-bottom:10px;}
 .empmsg.good{background:#EAF8F3;color:#1F7F7C;} .empmsg.bad{background:#FDEDE7;color:#B4541E;}
 .btn.isoff{opacity:.4;cursor:not-allowed;pointer-events:auto;}
-.mailcard{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
-  background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:8px;}
-.mailcard .mc-t b{display:block;font-size:14.5px;} .mailcard .mc-t span{font-size:12.5px;color:var(--muted);}
-.mailcard .mc-b{display:flex;gap:8px;flex-wrap:wrap;}
+.mailcard{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px 16px;
+  background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
+.mailcard .mc-t{min-width:0;}
+.mailcard .mc-t b{display:block;font-size:14.5px;line-height:1.3;}
+.mailcard .mc-t span{display:block;font-size:12.5px;color:var(--muted);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mailcard .mc-b{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:560px;max-width:100%;}
+.mailcard .mc-b .btn{width:100%;justify-content:center;text-align:center;padding:11px 10px;font-size:13.5px;line-height:1.25;}
+@media (max-width:980px){ .mailcard{grid-template-columns:1fr;} .mailcard .mc-b{width:100%;} }
 .mailprev{margin:4px 0 14px;border:1.5px dashed #C9DDEE;border-radius:14px;overflow:auto;background:#F2F6FA;}
+#busybar{position:fixed;top:0;left:0;height:3px;width:0;z-index:99;background:linear-gradient(90deg,var(--turq),var(--topaz));
+  transition:width .25s ease,opacity .3s ease;opacity:0;}
+#busybar.on{width:92%;opacity:1;transition:width 8s cubic-bezier(.1,.8,.2,1),opacity .15s;}
 .demobar{margin-bottom:18px;background:#FFF4E5;border:1.5px solid #F2C48D;color:#8A5A16;
   border-radius:12px;padding:13px 16px;font-size:13.5px;line-height:1.6;}
 .demobar code{background:#FBE8CE;border-radius:5px;padding:1px 6px;font-family:Consolas,monospace;font-size:12px;}
@@ -336,7 +344,7 @@ let icCode = "";                          // code is whatever IC types, verified
 let SUBMIT_ENDPOINT = "https://script.google.com/macros/s/AKfycbxJ6LBr6rdxDbE4V3iiX8Evx4R99AkES0syxs0sttoSDZzWUcvB4UhB_U3KDRuEA_Wd/exec";
 let VOTING_PAGE_URL = "https://kabi.ai/recognition"; // link placed behind the Vote Now button
 let previewKind = null; let copiedKind = null; let empMsg = ""; let empListOpen = false;
-let pwMsg = ""; let submitState = "idle"; let submitErr = ""; let liveMsg = ""; let cycleBusy = false; let cycleMsg = "";
+let busyEmpId = ""; let pwMsg = ""; let submitState = "idle"; let submitErr = ""; let liveMsg = ""; let cycleBusy = false; let cycleMsg = "";
 let CSV_LIVE_URL = "";   // IC pastes the real workbook Share link here (session-only in this demo)
 let VOTING_OPEN = true;
 const VOTES_STORE = [];              // this session's votes; production writes to the live workbook
@@ -458,9 +466,22 @@ function pdots(){
     return `<span class="d ${cls}" title="${esc(c.name)}"></span>`;}).join("")}</span>`;
 }
 
+/* ============ busy indicator ============ */
+let busyN = 0;
+function busy(d){
+  busyN = Math.max(0, busyN + d);
+  let b = document.getElementById("busybar");
+  if(!b){ b = document.createElement("div"); b.id="busybar"; document.body.appendChild(b); }
+  b.className = busyN ? "on" : "";
+  document.body.style.cursor = busyN ? "progress" : "";
+}
 /* ============ render ============ */
+let lastRenderStep = -1;
 function render(){
   const app = document.getElementById("app");
+  const keepY = (lastRenderStep === step) ? window.scrollY : 0;   // no jump on in-place updates
+  lastRenderStep = step;
+  queueMicrotask(()=>window.scrollTo(0, keepY));
   if(step===0){
     setWash("#2A4A93", false);
     app.innerHTML = `<div class="screen active">
@@ -657,7 +678,7 @@ function render(){
             <div class="mc-t"><b>${EMAIL_META[k].label}</b><span>${esc(EMAIL_META[k].subject())}</span></div>
             <div class="mc-b">
               <button class="btn primary" onclick="icCopyEmail('${k}')">${copiedKind===k?ICON.check+" Copied — paste into your draft":"Copy designed email"}</button>
-              <button class="btn ghost" onclick="icDownloadEml('${k}')">${ICON.dl} Download email draft (.eml)</button>
+              <button class="btn ghost" onclick="icDownloadEml('${k}')">${ICON.dl} Download .eml draft</button>
               <button class="btn ghost" onclick="icPreview('${k}')">${previewKind===k?"Hide preview":"Preview"}</button>
             </div>
           </div>
@@ -699,7 +720,7 @@ function render(){
             <div class="empcard">
               <span class="empav" style="background:linear-gradient(135deg,${p.g[0]},${p.g[1]})">${initials(p.name)}</span>
               <span class="empinfo"><b>${esc(p.name)}</b><span class="mut">${esc(p.jt)}</span><span class="mut eml">${esc(p.email)}</span></span>
-              <button class="empdel" onclick="icDelEmp('${p.id}')">Remove</button>
+              <button class="empdel" ${busyEmpId===p.id?"disabled":""} onclick="icDelEmp('${p.id}')">${busyEmpId===p.id?"Removing…":"Remove"}</button>
             </div>`).join("")}</div>`:""}
         </div>
 
@@ -868,19 +889,42 @@ function gasApi(req){
       .clientApi(req);
   });
 }
+function b64url(str){
+  const bytes = new TextEncoder().encode(str);
+  let bin=""; for(let i=0;i<bytes.length;i+=0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i,i+0x8000));
+  return btoa(bin);
+}
 async function api(body){
   if(IN_GAS()) return gasApi({post: body});
-  const r = await fetch(SUBMIT_ENDPOINT, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify(body)});
-  let j={}; try{ j = await r.json(); }catch(e){}
-  if(!r.ok || j.ok===false) throw new Error(j.error || ("HTTP "+r.status));
-  return j;
+  busy(1);
+  try{
+    try{
+      const r = await fetch(SUBMIT_ENDPOINT, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify(body)});
+      let j={}; try{ j = await r.json(); }catch(e){}
+      if(r.ok && j && j.ok!==false) return j;
+      if(r.ok && j && j.ok===false) throw new Error(j.error || "error");
+      throw new Error("HTTP "+r.status);            // e.g. 404 from the Apps Script redirect
+    }catch(ePost){
+      const m = String(ePost.message||"");
+      // Only retry transport-level failures, never real validation errors from the receiver.
+      if(!/HTTP|Failed to fetch|NetworkError|load failed/i.test(m)) throw ePost;
+      const r2 = await fetch(SUBMIT_ENDPOINT+"?p="+encodeURIComponent(b64url(JSON.stringify(body))));
+      const j2 = await r2.json();
+      if(!r2.ok) throw new Error("HTTP "+r2.status);
+      if(j2 && j2.ok===false) throw new Error(j2.error||"error");
+      return j2;
+    }
+  } finally { busy(-1); }
 }
 async function apiGet(params){
   if(IN_GAS()) return gasApi({get: params});
-  const r = await fetch(SUBMIT_ENDPOINT+"?"+new URLSearchParams(params).toString());
-  const j = await r.json();
-  if(j.ok===false) throw new Error(j.error||"error");
-  return j;
+  busy(1);
+  try{
+    const r = await fetch(SUBMIT_ENDPOINT+"?"+new URLSearchParams(params).toString());
+    const j = await r.json();
+    if(j.ok===false) throw new Error(j.error||"error");
+    return j;
+  } finally { busy(-1); }
 }
 const AV_G = [["#1E5EA2","#61C5D2"],["#675EAA","#1EAFD9"],["#2866A8","#3FA67D"],["#1F7F7C","#61C5D2"],["#3FA67D","#0EB3AE"],["#3D3185","#675EAA"]];
 async function loadRoster(){
@@ -1034,6 +1078,7 @@ function icAddEmp(){
   const id = "EMP" + String(num).padStart(3,"0");
   const G = [["#1E5EA2","#61C5D2"],["#675EAA","#1EAFD9"],["#2866A8","#3FA67D"],["#1F7F7C","#61C5D2"],["#3FA67D","#0EB3AE"],["#3D3185","#675EAA"]];
   if(SUBMIT_ENDPOINT){
+    empMsg="ok:Adding "+n+" …"; empListOpen=true; render();
     api({action:"addEmp", code:icCode, emp:{id,name:n,email:em,jt}})
       .then(()=>loadRoster()).then(()=>{ empMsg="ok:"+n+" added — visible to all voters immediately."; empListOpen=true; render(); })
       .catch(e=>{ empMsg="err:Couldn't add on the receiver: "+(e.message||"error"); render(); });
@@ -1047,22 +1092,25 @@ function icAddEmp(){
 async function icDelEmp(id){
   const i = PEOPLE.findIndex(p=>p.id===id); if(i<0) return;
   const nm = PEOPLE[i].name, em = PEOPLE[i].email;
+  busyEmpId = id; empMsg = "ok:Removing " + nm + " …"; empListOpen = true; render();
   if(SUBMIT_ENDPOINT){
     try{
       // send BOTH id and email — the receiver matches on either, so a blank/
       // mismatched ID column in the Roster sheet can't block the removal.
       await api({action:"delEmp", code:icCode, id, email:em});
       await loadRoster();
+      busyEmpId = "";
       if(PEOPLE.some(p=>p.email===em)){
         empMsg="err:The receiver didn't remove "+nm+". Update the Apps Script to the latest version, then Deploy → Manage deployments → New version.";
         empListOpen=true; render(); return;
       }
     }
-    catch(e){ empMsg="err:Couldn't remove "+nm+": "+(e.message||"error"); empListOpen=true; render(); return; }
+    catch(e){ busyEmpId=""; empMsg="err:Couldn't remove "+nm+": "+(e.message||"error"); empListOpen=true; render(); return; }
   } else {
     PEOPLE.splice(i,1);
     CATS.forEach(c=>{ orders[c.code] = orders[c.code].filter(x=>x!==id); });
   }
+  busyEmpId = "";
   CATS.forEach(c=>{ if(picks[c.code]===id) delete picks[c.code]; });
   empMsg = "ok:" + nm + " removed from the candidate list. Votes already received stay counted under their name."; empListOpen = true;
   render();
