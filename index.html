@@ -336,7 +336,7 @@ let icCode = "";                          // code is whatever IC types, verified
 let SUBMIT_ENDPOINT = "https://script.google.com/macros/s/AKfycbxJ6LBr6rdxDbE4V3iiX8Evx4R99AkES0syxs0sttoSDZzWUcvB4UhB_U3KDRuEA_Wd/exec";
 let VOTING_PAGE_URL = "https://kabi.ai/recognition"; // link placed behind the Vote Now button
 let previewKind = null; let copiedKind = null; let empMsg = ""; let empListOpen = false;
-let submitState = "idle"; let submitErr = ""; let liveMsg = ""; let cycleBusy = false; let cycleMsg = "";
+let pwMsg = ""; let submitState = "idle"; let submitErr = ""; let liveMsg = ""; let cycleBusy = false; let cycleMsg = "";
 let CSV_LIVE_URL = "";   // IC pastes the real workbook Share link here (session-only in this demo)
 let VOTING_OPEN = true;
 const VOTES_STORE = [];              // this session's votes; production writes to the live workbook
@@ -603,7 +603,7 @@ function render(){
         <input id="pw" type="password" placeholder="IC access code" autocomplete="off"
           style="width:100%;margin-top:14px;padding:13px 14px;border-radius:9px;border:1.5px solid var(--line);font-size:15px;outline:none"
           onkeydown="if(event.key==='Enter')checkPw();">
-        ${pwErr?`<div style="color:#B4541E;font-size:12.5px;margin-top:7px">Incorrect access code.</div>`:""}
+        ${pwErr?`<div style="color:#B4541E;font-size:12.5px;margin-top:7px;line-height:1.5">${esc(pwMsg||"Incorrect access code.")}</div>`:""}
         <div style="margin-top:16px;display:flex;gap:10px">
           <button class="btn ghost" onclick="go(0)">${ICON.left} Back</button>
           <button class="btn primary" onclick="checkPw()">Open console ${ICON.right}</button>
@@ -797,11 +797,32 @@ async function checkPw(){
   const v = (document.getElementById("pw")||{}).value || "";
   if(!SUBMIT_ENDPOINT){
     if(v === IC_PASSCODE_DEMO){ icCode = v; icAuthed = true; pwErr = false; go(9); }
-    else { pwErr = true; render(); }
+    else { pwErr = true; pwMsg = "Incorrect access code."; render(); }
     return;
   }
-  try{ await apiGet({action:"auth", code: v}); icCode = v; icAuthed = true; pwErr = false; go(9); }
-  catch(e){ pwErr = true; render(); }
+  try{
+    await apiGet({action:"auth", code: v});
+    icCode = v; icAuthed = true; pwErr = false; pwMsg = ""; go(9); return;
+  }catch(e){
+    const msg = String(e.message||"");
+    if(/unknown|not found|bad request/i.test(msg)){
+      // Older receiver without the "auth" action — verify the code another way.
+      try{
+        await apiGet({action:"votes", code: v, cycle: CYCLE});
+        icCode = v; icAuthed = true; pwErr = false; pwMsg = ""; go(9); return;
+      }catch(e2){
+        const m2 = String(e2.message||"");
+        pwErr = true;
+        pwMsg = /unauthor/i.test(m2) ? "Incorrect access code."
+              : "Couldn't verify with the receiver (" + m2 + "). Update the script to the latest version and deploy a NEW version.";
+        render(); return;
+      }
+    }
+    pwErr = true;
+    pwMsg = /unauthor/i.test(msg) ? "Incorrect access code — it must match SECRET in the receiver script."
+          : "Couldn't reach the receiver (" + msg + "). Check SUBMIT_ENDPOINT, and that the Web app is deployed with access: Anyone.";
+    render();
+  }
 }
 async function icLoadLive(){
   liveMsg = "Loading live data…"; render();
